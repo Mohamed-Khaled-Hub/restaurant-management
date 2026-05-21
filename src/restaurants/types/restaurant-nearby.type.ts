@@ -1,9 +1,6 @@
 import { RestaurantDocument } from '../schemas/restaurant.schema'
 
-export interface RestaurantNearby extends Omit<
-    RestaurantDocument,
-    'toObject' | 'toJSON'
-> {
+export interface RestaurantNearby extends RestaurantDocument {
     distanceInMeters: number
     distanceString: string
 }
