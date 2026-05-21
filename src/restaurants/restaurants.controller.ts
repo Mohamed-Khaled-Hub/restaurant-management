@@ -22,6 +22,7 @@ import { RestaurantsService } from './restaurants.service'
 import { CreateRestaurantDto } from './dto/create-restaurant.dto'
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto'
 import { RestaurantDocument } from './schemas/restaurant.schema'
+import { UserDocument } from '../users/schemas/user.schema'
 import { Cuisine } from './enums/cuisine.enum'
 
 @ApiTags('Restaurants')
@@ -113,6 +114,48 @@ export class RestaurantsController {
         }
 
         return this.restaurantsService.findNearby(longitude, latitude)
+    }
+
+    @Get(':identifier/followers')
+    @ApiOperation({
+        summary: 'Get followers of a restaurant',
+        description:
+            'Retrieves a list of users who follow the specified restaurant.',
+    })
+    @ApiParam({
+        name: 'identifier',
+        description: 'Restaurant MongoDB ObjectId or slug.',
+        example: '6830bdb8c1d0f1c3a3a7f111 or pizza-queen',
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Followers list successfully compiled.',
+    })
+    @ApiResponse({
+        status: 400,
+        description: 'Failed to process followers lookup pipeline.',
+    })
+    @ApiResponse({
+        status: 404,
+        description: 'Target restaurant profile not found.',
+    })
+    async getFollowers(@Param('identifier') identifier: string) {
+        let followers: UserDocument[] | null = null
+        try {
+            followers = await this.restaurantsService.getFollowers(identifier)
+        } catch {
+            throw new BadRequestException(
+                'Failed to execute target restaurant followers lookup.',
+            )
+        }
+
+        if (!followers) {
+            throw new NotFoundException(
+                'Restaurant profile not found with the provided ID or slug.',
+            )
+        }
+
+        return followers
     }
 
     @Get(':identifier')

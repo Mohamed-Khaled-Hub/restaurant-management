@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model, Types, QueryFilter } from 'mongoose'
 import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema'
+import { Follower, FollowerDocument } from '../users/schemas/follower.schema'
+import { UserDocument } from '../users/schemas/user.schema'
 import { CreateRestaurantDto } from './dto/create-restaurant.dto'
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto'
 import { Cuisine } from './enums/cuisine.enum'
@@ -12,6 +14,8 @@ export class RestaurantsService {
     constructor(
         @InjectModel(Restaurant.name)
         private readonly restaurantModel: Model<RestaurantDocument>,
+        @InjectModel(Follower.name)
+        private readonly followerModel: Model<FollowerDocument>,
     ) {}
 
     private getIdentifierQuery(identifier: string): QueryFilter<Restaurant> {
@@ -106,6 +110,46 @@ export class RestaurantsService {
                         location: {
                             coordinates: '$location.coordinates',
                         },
+                    },
+                },
+            ])
+            .exec()
+    }
+
+    async getFollowers(identifier: string): Promise<UserDocument[] | null> {
+        const restaurant = await this.restaurantModel
+            .findOne(this.getIdentifierQuery(identifier))
+            .exec()
+
+        if (!restaurant) {
+            return null
+        }
+
+        return this.followerModel
+            .aggregate<UserDocument>([
+                {
+                    $match: {
+                        restaurantId: restaurant._id,
+                    },
+                },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'userId',
+                        foreignField: '_id',
+                        as: 'userDetails',
+                    },
+                },
+                {
+                    $unwind: '$userDetails',
+                },
+                {
+                    $project: {
+                        _id: '$userDetails._id',
+                        fullName: '$userDetails.fullName',
+                        favoriteCuisines: '$userDetails.favoriteCuisines',
+                        createdAt: '$userDetails.createdAt',
+                        updatedAt: '$userDetails.updatedAt',
                     },
                 },
             ])
