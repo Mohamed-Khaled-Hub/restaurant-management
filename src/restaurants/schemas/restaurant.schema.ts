@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 import { HydratedDocument } from 'mongoose'
 import { Cuisine } from '../enums/cuisine.enum'
+import { Follower } from '../../users/schemas/follower.schema'
 
 export type RestaurantDocument = HydratedDocument<Restaurant>
 
@@ -60,3 +61,18 @@ RestaurantSchema.set('toJSON', {
         }
     },
 })
+
+RestaurantSchema.post(
+    'findOneAndDelete',
+    async function (doc: RestaurantDocument | null): Promise<void> {
+        if (!doc) {
+            return
+        }
+
+        const followerModel = this.model.db.model<Follower>('Follower')
+
+        await followerModel.deleteMany({
+            restaurantId: doc._id,
+        })
+    },
+)

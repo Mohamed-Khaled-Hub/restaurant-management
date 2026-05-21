@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 import { HydratedDocument } from 'mongoose'
 import { Cuisine } from '../../restaurants/enums/cuisine.enum'
+import { Follower } from './follower.schema'
 
 export type UserDocument = HydratedDocument<User>
 
@@ -21,3 +22,18 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User)
+
+UserSchema.post(
+    'findOneAndDelete',
+    async function (doc: UserDocument | null): Promise<void> {
+        if (!doc) {
+            return
+        }
+
+        const followerModel = this.model.db.model<Follower>('Follower')
+
+        await followerModel.deleteMany({
+            userId: doc._id,
+        })
+    },
+)
