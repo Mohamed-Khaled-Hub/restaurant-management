@@ -5,6 +5,7 @@ import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema'
 import { CreateRestaurantDto } from './dto/create-restaurant.dto'
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto'
 import { Cuisine } from './enums/cuisine.enum'
+import { RestaurantNearby } from './types/restaurant-nearby.type'
 
 @Injectable()
 export class RestaurantsService {
@@ -38,15 +39,76 @@ export class RestaurantsService {
             .exec()
     }
 
-    async findNearby(lng: number, lat: number): Promise<RestaurantDocument[]> {
+    async findNearby(lng: number, lat: number): Promise<RestaurantNearby[]> {
         return this.restaurantModel
-            .find({
-                location: {
-                    $geoWithin: {
-                        $centerSphere: [[lng, lat], 1 / 6378.1],
+            .aggregate<RestaurantNearby>([
+                {
+                    $geoNear: {
+                        near: {
+                            type: 'Point',
+                            coordinates: [lng, lat],
+                        },
+                        distanceField: 'distanceInMeters',
+                        maxDistance: 1000,
+                        spherical: true,
                     },
                 },
-            })
+                {
+                    $addFields: {
+                        distanceString: {
+                            $cond: {
+                                if: { $gte: ['$distanceInMeters', 1000] },
+                                then: {
+                                    $concat: [
+                                        {
+                                            $toString: {
+                                                $round: [
+                                                    {
+                                                        $divide: [
+                                                            '$distanceInMeters',
+                                                            1000,
+                                                        ],
+                                                    },
+                                                    2,
+                                                ],
+                                            },
+                                        },
+                                        ' km away',
+                                    ],
+                                },
+                                else: {
+                                    $concat: [
+                                        {
+                                            $toString: {
+                                                $round: [
+                                                    '$distanceInMeters',
+                                                    0,
+                                                ],
+                                            },
+                                        },
+                                        ' meters away',
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        name: 1,
+                        slug: 1,
+                        cuisines: 1,
+                        createdAt: 1,
+                        updatedAt: 1,
+                        distanceInMeters: 1,
+                        distanceString: 1,
+                        location: {
+                            coordinates: '$location.coordinates',
+                        },
+                    },
+                },
+            ])
             .exec()
     }
 
