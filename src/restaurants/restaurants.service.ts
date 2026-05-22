@@ -137,19 +137,19 @@ export class RestaurantsService {
                         from: 'users',
                         localField: 'userId',
                         foreignField: '_id',
-                        as: 'userDetails',
+                        as: 'user',
                     },
                 },
                 {
-                    $unwind: '$userDetails',
+                    $unwind: '$user',
                 },
                 {
                     $project: {
-                        _id: '$userDetails._id',
-                        fullName: '$userDetails.fullName',
-                        favoriteCuisines: '$userDetails.favoriteCuisines',
-                        createdAt: '$userDetails.createdAt',
-                        updatedAt: '$userDetails.updatedAt',
+                        _id: '$user._id',
+                        fullName: '$user.fullName',
+                        favoriteCuisines: '$user.favoriteCuisines',
+                        createdAt: '$user.createdAt',
+                        updatedAt: '$user.updatedAt',
                     },
                 },
             ])

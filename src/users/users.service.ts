@@ -93,34 +93,27 @@ export class UsersService {
 
         return this.followerModel
             .aggregate<RestaurantDocument>([
-                {
-                    $match: {
-                        userId: new Types.ObjectId(userId),
-                    },
-                },
+                { $match: { userId: new Types.ObjectId(userId) } },
                 {
                     $lookup: {
                         from: 'restaurants',
                         localField: 'restaurantId',
                         foreignField: '_id',
-                        as: 'restaurantDetails',
+                        as: 'restaurant',
                     },
                 },
-                {
-                    $unwind: '$restaurantDetails',
-                },
+                { $unwind: '$restaurant' },
                 {
                     $project: {
-                        _id: '$restaurantDetails._id',
-                        name: '$restaurantDetails.name',
-                        slug: '$restaurantDetails.slug',
-                        cuisines: '$restaurantDetails.cuisines',
+                        _id: '$restaurant._id',
+                        name: '$restaurant.name',
+                        slug: '$restaurant.slug',
+                        cuisines: '$restaurant.cuisines',
                         location: {
-                            coordinates:
-                                '$restaurantDetails.location.coordinates',
+                            coordinates: '$restaurant.location.coordinates',
                         },
-                        createdAt: '$restaurantDetails.createdAt',
-                        updatedAt: '$restaurantDetails.updatedAt',
+                        createdAt: '$restaurant.createdAt',
+                        updatedAt: '$restaurant.updatedAt',
                     },
                 },
             ])
@@ -131,86 +124,82 @@ export class UsersService {
         userId: string,
     ): Promise<Recommendations | null> {
         const targetUser = await this.userModel.findById(userId).exec()
+
         if (!targetUser) {
             return null
         }
 
-        if (
-            !targetUser.favoriteCuisines ||
-            targetUser.favoriteCuisines.length === 0
-        ) {
+        if (!targetUser.favoriteCuisines?.length) {
             return { users: [], restaurants: [] }
         }
 
-        const userObjectId = new Types.ObjectId(userId)
-
-        const pipelineResult = await this.userModel
+        return this.userModel
             .aggregate<Recommendations>([
                 {
                     $match: {
-                        _id: { $ne: userObjectId },
+                        _id: { $ne: targetUser._id },
                         favoriteCuisines: { $in: targetUser.favoriteCuisines },
-                    },
-                },
-                {
-                    $group: {
-                        _id: null,
-                        similarUsers: {
-                            $push: {
-                                _id: '$_id',
-                                fullName: '$fullName',
-                                favoriteCuisines: '$favoriteCuisines',
-                            },
-                        },
                     },
                 },
                 {
                     $lookup: {
                         from: 'followers',
-                        localField: 'similarUsers._id',
+                        localField: '_id',
                         foreignField: 'userId',
-                        as: 'followedRelations',
+                        as: 'follows',
                     },
+                },
+                {
+                    $unwind: '$follows',
                 },
                 {
                     $lookup: {
                         from: 'restaurants',
-                        localField: 'followedRelations.restaurantId',
+                        localField: 'follows.restaurantId',
                         foreignField: '_id',
-                        as: 'aggregatedRestaurants',
+                        as: 'restaurant',
+                    },
+                },
+                {
+                    $unwind: '$restaurant',
+                },
+                {
+                    $group: {
+                        _id: null,
+                        similarUsers: {
+                            $addToSet: {
+                                _id: '$_id',
+                                fullName: '$fullName',
+                                favoriteCuisines: '$favoriteCuisines',
+                                createdAt: '$createdAt',
+                                updatedAt: '$updatedAt',
+                            },
+                        },
+                        restaurants: {
+                            $addToSet: {
+                                _id: '$restaurant._id',
+                                name: '$restaurant.name',
+                                slug: '$restaurant.slug',
+                                cuisines: '$restaurant.cuisines',
+                                location: {
+                                    coordinates:
+                                        '$restaurant.location.coordinates',
+                                },
+                                createdAt: '$restaurant.createdAt',
+                                updatedAt: '$restaurant.updatedAt',
+                            },
+                        },
                     },
                 },
                 {
                     $project: {
                         _id: 0,
-                        users: { $ifNull: ['$similarUsers', []] },
-                        restaurants: {
-                            $map: {
-                                input: {
-                                    $ifNull: ['$aggregatedRestaurants', []],
-                                },
-                                as: 'res',
-                                in: {
-                                    _id: '$$res._id',
-                                    name: '$$res.name',
-                                    slug: '$$res.slug',
-                                    cuisines: '$$res.cuisines',
-                                    location: {
-                                        coordinates:
-                                            '$$res.location.coordinates',
-                                    },
-                                    createdAt: '$$res.createdAt',
-                                    updatedAt: '$$res.updatedAt',
-                                },
-                            },
-                        },
+                        users: '$similarUsers',
+                        restaurants: '$restaurants',
                     },
                 },
             ])
             .exec()
-
-        return pipelineResult.length > 0
-            ? pipelineResult[0]
-            : { users: [], restaurants: [] }
+            .then((result) => result[0] || { users: [], restaurants: [] })
     }
 }
